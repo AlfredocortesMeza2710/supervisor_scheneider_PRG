@@ -172,12 +172,17 @@ with tab2:
 
     st.subheader(f"Alambrado - {orden_activa}")
 
+    tipo_alambrado = st.selectbox(
+        "Tipo de alambrado",
+        ["Alambrado en sección", "Alambrado en panel"]
+    )
+
     seccion_sel = st.selectbox("Sección", range(1, secciones_total+1), key="alm_sec")
 
     df = pd.read_sql_query(
-        "SELECT * FROM produccion WHERE Orden=? AND Area='Alambrado' AND Seccion=?",
+        "SELECT * FROM produccion WHERE Orden=? AND Area=? AND Seccion=?",
         conn,
-        params=(orden_activa, seccion_sel)
+        params=(orden_activa, tipo_alambrado, seccion_sel)
     )
 
     bloqueado = not df.empty and not editar
@@ -196,7 +201,7 @@ with tab2:
         conn.execute("""
         INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?)
         """, (
-            orden_activa, "Alambrado", seccion_sel, porcentaje, turno,
+            orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
             te, tm, pausa,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
@@ -319,36 +324,77 @@ with tab4:
                 df_sec = df_ord[df_ord["Seccion"] == sec]
                 df_sec = df_sec.sort_values("Fecha").drop_duplicates(subset=["Area"], keep="last")
 
-                for _, row in df_sec.iterrows():
+                # Separar por tipo de alambrado
+                df_ensamble = df_sec[df_sec["Area"] == "Ensamble"]
+                df_seccion = df_sec[df_sec["Area"] == "Alambrado en sección"]
+                df_panel = df_sec[df_sec["Area"] == "Alambrado en panel"]
 
-                    # SEMÁFORO
+# ENSAMBLE (col1)
+                for _, row in df_ensamble.iterrows():
+
                     if row["Porcentaje"] < 40:
-                        color = "#e53935"  # rojo
+                        color = "#e53935"
                     elif row["Porcentaje"] < 80:
-                        color = "#fbc02d"  # amarillo
+                        color = "#fbc02d"
                     else:
-                        color = "#43a047"  # verde
+                        color = "#43a047"
 
                     barra = f"""
                     <div style="background:#e0e0e0; width:100%;">
                         <div style="
-                            width:{row['Porcentaje']}%;
-                            min-width:120px;
-                            background:{color};
-                            padding:5px;
-                            color:white;
-                            white-space:nowrap;
-                            overflow:hidden;
-                        ">
-                            {row['Area']} - {int(row['Porcentaje'])}%
-                        </div>
+                        width:{row['Porcentaje']}%;
+                        min-width:120px;
+                        background:{color};
+                        padding:5px;
+                        color:white;
+                    ">
+                        {row['Area']} - {int(row['Porcentaje'])}%
                     </div>
-                    """
+                </div>
+                """
 
-                    if row["Area"] == "Ensamble":
-                        col1.markdown(barra, unsafe_allow_html=True)
-                    else:
-                        col2.markdown(barra, unsafe_allow_html=True)
+                col1.markdown(barra, unsafe_allow_html=True)
 
+# ALAMBRADO SECCIÓN (col2)
+            for _, row in df_seccion.iterrows():
+
+                color = "#1e88e5"  # azul
+
+                barra = f"""
+                <div style="background:#e0e0e0; width:100%;">
+                    <div style="
+                        width:{row['Porcentaje']}%;
+                        min-width:120px;
+                        background:{color};
+                        padding:5px;
+                        color:white;
+                ">
+                        {row['Area']} - {int(row['Porcentaje'])}%
+                    </div>
+                </div>
+                """
+
+                col2.markdown(barra, unsafe_allow_html=True)
+
+# ALAMBRADO PANEL (col2 también)
+            for _, row in df_panel.iterrows():
+
+                color = "#8e24aa"  # morado
+
+                barra = f"""
+                <div style="background:#e0e0e0; width:100%;">
+                    <div style="
+                        width:{row['Porcentaje']}%;
+                        min-width:120px;
+                        background:{color};
+                        padding:5px;
+                        color:white;
+                    ">
+                        {row['Area']} - {int(row['Porcentaje'])}%
+                    </div>
+                </div>
+                """
+
+                col2.markdown(barra, unsafe_allow_html=True)
     else:
         st.info("No hay datos")

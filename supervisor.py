@@ -276,7 +276,7 @@ with tab4:
 
                 texto = f"<b>Sección {sec}</b><br/>"
 
-    # Producción
+# Producción
                 for _, row in df_sec.iterrows():
                     texto += f"{row['Area']}: {int(row['Porcentaje'])}% - Turno: {row['Turno']}<br/>"
                 elementos.append(Paragraph(texto, styles["Normal"]))
@@ -323,13 +323,17 @@ with tab4:
 
                 df_sec = df_ord[df_ord["Seccion"] == sec]
                 df_sec = df_sec.sort_values("Fecha").drop_duplicates(subset=["Area"], keep="last")
-
                 # Separar por tipo de alambrado
                 df_ensamble = df_sec[df_sec["Area"] == "Ensamble"]
-                df_seccion = df_sec[df_sec["Area"] == "Alambrado en sección"]
+
+# AQUÍ ESTÁ EL FIX
+                df_seccion = df_sec[df_sec["Area"].isin(["Alambrado", "Alambrado en sección"])]
                 df_panel = df_sec[df_sec["Area"] == "Alambrado en panel"]
 
+
+# =========================
 # ENSAMBLE (col1)
+# =========================
                 for _, row in df_ensamble.iterrows():
 
                     if row["Porcentaje"] < 40:
@@ -342,59 +346,61 @@ with tab4:
                     barra = f"""
                     <div style="background:#e0e0e0; width:100%;">
                         <div style="
-                        width:{row['Porcentaje']}%;
-                        min-width:120px;
-                        background:{color};
-                        padding:5px;
-                        color:white;
-                    ">
-                        {row['Area']} - {int(row['Porcentaje'])}%
+                            width:{row['Porcentaje']}%;
+                            min-width:120px;
+                            background:{color};
+                            padding:5px;
+                            color:white;
+                        ">
+                            {row['Area']} - {int(row['Porcentaje'])}%
+                        </div>
                     </div>
-                </div>
-                """
+                    """
 
-                col1.markdown(barra, unsafe_allow_html=True)
+                    col1.markdown(barra, unsafe_allow_html=True)
 
+# =========================
 # ALAMBRADO SECCIÓN (col2)
-            for _, row in df_seccion.iterrows():
+# =========================
+                for _, row in df_seccion.iterrows():
 
-                color = "#1e88e5"  # azul
+                    color = "#1e88e5"
 
-                barra = f"""
-                <div style="background:#e0e0e0; width:100%;">
-                    <div style="
-                        width:{row['Porcentaje']}%;
-                        min-width:120px;
-                        background:{color};
-                        padding:5px;
-                        color:white;
-                ">
-                        {row['Area']} - {int(row['Porcentaje'])}%
+                    barra = f"""
+                    <div style="background:#e0e0e0; width:100%;">
+                        <div style="
+                            width:{row['Porcentaje']}%;
+                            min-width:120px;
+                            background:{color};
+                            padding:5px;
+                            color:white;
+                        ">
+                            {row['Area']} - {int(row['Porcentaje'])}%
+                        </div>
                     </div>
-                </div>
-                """
+                    """
 
-                col2.markdown(barra, unsafe_allow_html=True)
+                    col2.markdown(barra, unsafe_allow_html=True)
+# =========================
+# ALAMBRADO PANEL (col2)
+# =========================
+                for _, row in df_panel.iterrows():
 
-# ALAMBRADO PANEL (col2 también)
-            for _, row in df_panel.iterrows():
+                    color = "#8e24aa"
 
-                color = "#8e24aa"  # morado
-
-                barra = f"""
-                <div style="background:#e0e0e0; width:100%;">
-                    <div style="
-                        width:{row['Porcentaje']}%;
-                        min-width:120px;
-                        background:{color};
-                        padding:5px;
-                        color:white;
-                    ">
-                        {row['Area']} - {int(row['Porcentaje'])}%
+                    barra = f"""
+                    <div style="background:#e0e0e0; width:100%;">
+                        <div style="
+                            width:{row['Porcentaje']}%;
+                            min-width:120px;
+                            background:{color};
+                            padding:5px;
+                            color:white;
+                        ">
+                            {row['Area']} - {int(row['Porcentaje'])}%
+                        </div>
                     </div>
-                </div>
-                """
+                    """
 
-                col2.markdown(barra, unsafe_allow_html=True)
-    else:
-        st.info("No hay datos")
+                    col2.markdown(barra, unsafe_allow_html=True)
+                

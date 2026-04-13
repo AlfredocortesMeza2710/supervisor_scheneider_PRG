@@ -11,7 +11,10 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 st.set_page_config(layout="wide")
 st.title("LINEA DE PRODUCCIÓN")
-
+tipo_linea = st.selectbox(
+    "Tipo de línea",
+    ["ETS", "Línea rápida", "Altas"]
+)
 conn = sqlite3.connect("produccion.db", check_same_thread=False)
 
 # -------------------------------------------------
@@ -156,7 +159,7 @@ with tab1:
         """, (
             orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
             te, tm, pausa,
-            datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn.commit()
         st.success("Guardado")
@@ -195,7 +198,7 @@ with tab2:
         """, (
             orden_activa, "Alambrado", seccion_sel, porcentaje, turno,
             te, tm, pausa,
-            datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn.commit()
         st.success("Guardado")
@@ -216,7 +219,7 @@ with tab3:
         INSERT INTO faltantes VALUES (NULL,?,?,?,?,?,?)
         """, (
             orden_activa, "", 0, material, cantidad,
-            datetime.today().strftime("%Y-%m-%d")
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn.commit()
         st.success("Registrado")
@@ -247,10 +250,13 @@ with tab4:
 
         df = pd.read_sql_query("SELECT * FROM produccion", conn)
         df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
+        df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+        df_falt["Fecha"] = pd.to_datetime(df_falt["Fecha"], errors="coerce")
 
         for orden in df["Orden"].unique():
 
             elementos.append(Paragraph(f"<b>Orden: {orden}</b>", styles["Title"]))
+            elementos.append(Paragraph(f"Tipo de línea: {tipo_linea}", styles["Normal"]))
             elementos.append(Spacer(1, 10))
 
             df_ord = df[df["Orden"] == orden]
@@ -262,8 +268,7 @@ with tab4:
 
     # Producción
                 for _, row in df_sec.iterrows():
-                    texto += f"{row['Area']}: {int(row['Porcentaje'])}%<br/>"
-
+                    texto += f"{row['Area']}: {int(row['Porcentaje'])}% - Turno: {row['Turno']}<br/>"
                 elementos.append(Paragraph(texto, styles["Normal"]))
                 elementos.append(Spacer(1, 12))
             faltantes_ord = df_falt[df_falt["Orden"] == orden]
@@ -311,7 +316,7 @@ with tab4:
 
                 for _, row in df_sec.iterrows():
 
-                    # 🔥 SEMÁFORO
+                    # SEMÁFORO
                     if row["Porcentaje"] < 40:
                         color = "#e53935"  # rojo
                     elif row["Porcentaje"] < 80:

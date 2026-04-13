@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 
 st.set_page_config(layout="wide")
@@ -247,6 +247,11 @@ with tab4:
         doc = SimpleDocTemplate("reporte_produccion.pdf")
         styles = getSampleStyleSheet()
         elementos = []
+
+        logo = Image("Schneider.png", width=80, height=30)
+        logo.hAlign = "RIGHT"
+        elementos.append(logo)
+        elementos.append(Spacer(1, 10))
 
         df = pd.read_sql_query("SELECT * FROM produccion", conn)
         df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)

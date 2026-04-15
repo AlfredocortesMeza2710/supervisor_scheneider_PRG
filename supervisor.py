@@ -1,7 +1,7 @@
 # PRODUCCION PARA MONITOREO DE ORDENES - FINAL
 # HECHO POR ALFREDO CORTES MEZA
 # PRODUCTION LINE INTELLIGENCE MONITOR (PLIM)
-
+import os
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -15,7 +15,10 @@ tipo_linea = st.selectbox(
     "Tipo de línea",
     ["ETS", "Línea rápida", "Altas"]
 )
-conn = sqlite3.connect("produccion.db", check_same_thread=False)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(BASE_DIR, "produccion.db")
+
+conn = sqlite3.connect(db_path, check_same_thread=False)
 
 # -------------------------------------------------
 # BASE DE DATOS
@@ -136,7 +139,11 @@ with tab1:
 
     seccion_sel = st.selectbox("Sección", range(1, secciones_total+1))
 
-    df = pd.read_sql_query("SELECT * FROM produccion", conn)
+    df = pd.read_sql_query(
+    "SELECT * FROM produccion WHERE Orden=? AND Area='Ensamble' AND Seccion=?",
+    conn,
+    params=(orden_activa, seccion_sel)
+)
     df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
     params=(orden_activa, seccion_sel)
     

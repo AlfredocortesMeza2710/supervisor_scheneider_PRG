@@ -13,7 +13,7 @@ st.set_page_config(layout="wide")
 st.title("LINEA DE PRODUCCIÓN")
 tipo_linea = st.selectbox(
     "Tipo de línea",
-    ["ETS", "Línea rápida", "Altas"]
+    ["MCX", "HCX", "ETS"]
 )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, "produccion.db")
@@ -39,9 +39,12 @@ CREATE TABLE IF NOT EXISTS produccion (
     Seccion INTEGER,
     Porcentaje REAL,
     Turno TEXT,
+    Trabajador TEXT,
+    Ubicacion TEXT,
     Tiempo_efectivo REAL,
     Tiempo_muerto REAL,
     Pausas REAL,
+    Razon TEXT,
     Fecha DATE
 )
 """)
@@ -154,18 +157,39 @@ with tab1:
         st.warning("Sección bloqueada")
 
     porcentaje = st.slider("Avance (%)", 0, 100, step=10, disabled=bloqueado)
-    turno = st.selectbox("Turno", ["Día", "Noche"], disabled=bloqueado)
+    turno = st.selectbox("Turno", ["Primer turno", "Tercer turno"], disabled=bloqueado)
+    trabajador = st.text_input("Trabajador", disabled=bloqueado)
 
+    ubicacion = st.selectbox(
+        "Ubicación",
+        ["Línea", "Pruebas", "Preembarque"],
+        disabled=bloqueado
+    )
     te = st.number_input("Tiempo efectivo", value=0.0, disabled=bloqueado)
     tm = st.number_input("Tiempo muerto", value=0.0, disabled=bloqueado)
     pausa = st.number_input("Pausas", value=0.0, disabled=bloqueado)
+    razon = ""
 
+    if tm > 0 or pausa > 0:
+        razon_opcion = st.selectbox(
+            "Razón de pausas / tiempo muerto",
+            ["Junta de seguridad", "Junta informativa", "Evacuación", "Otro"],
+            disabled=bloqueado
+        )
+
+        if razon_opcion == "Otro":
+            razon = st.text_input("Especifica la razón", disabled=bloqueado)
+        else:
+            razon = razon_opcion
     if st.button("Guardar Ensamble", disabled=bloqueado):
         conn.execute("""
-        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?)
-        """, (
+        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, 
+        (
             orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
+            trabajador, ubicacion,
             te, tm, pausa,
+            razon,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn.commit()
@@ -198,20 +222,42 @@ with tab2:
         st.warning("Sección bloqueada")
 
     porcentaje = st.slider("Avance (%)", 0, 100, step=10, key="alm", disabled=bloqueado)
-    turno = st.selectbox("Turno", ["Día", "Noche"], key="alm_t", disabled=bloqueado)
+    turno = st.selectbox("Turno", ["Primer turno", "Tercer turno"], key="alm_t", disabled=bloqueado)
+    trabajador = st.text_input("Trabajador", key="alm_trab", disabled=bloqueado)
 
+    ubicacion = st.selectbox(
+        "Ubicación",
+        ["Línea", "Pruebas", "Preembarque"],
+        key="alm_ubi",
+        disabled=bloqueado
+    )
     te = st.number_input("Tiempo efectivo", key="alm_te", value=0.0, disabled=bloqueado)
     tm = st.number_input("Tiempo muerto", key="alm_tm", value=0.0, disabled=bloqueado)
     pausa = st.number_input("Pausas", key="alm_p", value=0.0, disabled=bloqueado)
+    razon = ""
 
+    if tm > 0 or pausa > 0:
+        razon_opcion = st.selectbox(
+            "Razón de pausas / tiempo muerto",
+            ["Junta de seguridad", "Junta informativa", "Evacuación", "Otro"],
+            key="alm_razon",
+            disabled=bloqueado
+        )
+
+        if razon_opcion == "Otro":
+            razon = st.text_input("Especifica la razón", key="alm_otro", disabled=bloqueado)
+        else:
+            razon = razon_opcion
     if st.button("Guardar Alambrado", disabled=bloqueado):
         conn.execute("""
-        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?)
-        """, (
-            orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
-            te, tm, pausa,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ))
+        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,(
+                orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
+                trabajador, ubicacion,
+                te, tm, pausa,
+                razon,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ))
         conn.commit()
         st.success("Guardado")
         st.rerun()
@@ -269,7 +315,6 @@ with tab4:
         df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
         df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
         df_falt["Fecha"] = pd.to_datetime(df_falt["Fecha"], errors="coerce")
-
         for orden in df["Orden"].unique():
 
             elementos.append(Paragraph(f"<b>Orden: {orden}</b>", styles["Title"]))
@@ -283,35 +328,44 @@ with tab4:
 
                 texto = f"<b>Sección {sec}</b><br/>"
 
-# Producción
                 for _, row in df_sec.iterrows():
-                    texto += f"{row['Area']}: {int(row['Porcentaje'])}% - Turno: {row['Turno']}<br/>"
+                    texto += f"{row['Area']}: {int(row['Porcentaje']) if pd.notna(row['Porcentaje']) else 0}% - {row['Turno']}<br/>"
+                    texto += f"Trabajador: {row['Trabajador']} | Ubicación: {row['Ubicacion']}<br/>"
+
+                    if row["Tiempo_muerto"] > 0 or row["Pausas"] > 0:
+                        texto += f"Tiempo muerto: {row['Tiempo_muerto']} | Pausas: {row['Pausas']}<br/>"
+
+                    if row["Razon"] and str(row["Razon"]).strip() != "":
+                        texto += f"Razón: {row['Razon']}<br/>"
+
+                    texto += "<br/>"
+
                 elementos.append(Paragraph(texto, styles["Normal"]))
                 elementos.append(Spacer(1, 12))
+
+# AQUÍ VA (fuera del for sec)
             faltantes_ord = df_falt[df_falt["Orden"] == orden]
+
             if not faltantes_ord.empty:
                 texto_falt = "<font color='red'><b>Faltantes:</b> "
 
-                lista = []
-                for _, f in faltantes_ord.iterrows():
-                    lista.append(f"{f['Material']} ({f['Cantidad']})")
+                lista = [f"{f['Material']} ({f['Cantidad']})" for _, f in faltantes_ord.iterrows()]
 
                 texto_falt += ", ".join(lista)
                 texto_falt += "</font>"
 
                 elementos.append(Paragraph(texto_falt, styles["Normal"]))
-                elementos.append(Spacer(1, 15))
+                elementos.append(Spacer(1, 15))    
 
-       
         doc.build(elementos)
              
         with open("reporte_produccion.pdf", "rb") as file:
             st.download_button("Descargar PDF", file, "reporte_produccion.pdf")
 
-    df = pd.read_sql_query("SELECT * FROM produccion", conn)
-    df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
+df = pd.read_sql_query("SELECT * FROM produccion", conn)
+df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
 
-    if not df.empty:
+if not df.empty:
 
         for orden in df["Orden"].unique():
 
@@ -359,7 +413,8 @@ with tab4:
                             padding:5px;
                             color:white;
                         ">
-                            {row['Area']} - {int(row['Porcentaje'])}%
+                            {row['Area']} - {int(row['Porcentaje'])}%<br>
+                                {row['Trabajador']} | 📍 {row['Ubicacion']}
                         </div>
                     </div>
                     """
@@ -382,7 +437,8 @@ with tab4:
                             padding:5px;
                             color:white;
                         ">
-                            {row['Area']} - {int(row['Porcentaje'])}%
+                            {row['Area']} - {int(row['Porcentaje'])}%<br>
+                                {row['Trabajador']} | 📍 {row['Ubicacion']}
                         </div>
                     </div>
                     """
@@ -404,7 +460,8 @@ with tab4:
                             padding:5px;
                             color:white;
                         ">
-                            {row['Area']} - {int(row['Porcentaje'])}%
+                            {row['Area']} - {int(row['Porcentaje'])}%<br>
+                                {row['Trabajador']} | 📍 {row['Ubicacion']}
                         </div>
                     </div>
                     """

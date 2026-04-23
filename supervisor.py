@@ -16,7 +16,7 @@ tipo_linea = st.selectbox(
     ["MCX", "HCX", "ETS"]
 )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-db_path = os.path.join(BASE_DIR, "produccion.db")
+db_path = os.path.join(BASE_DIR, "produccion_v2.db")
 
 conn = sqlite3.connect(db_path, check_same_thread=False)
 
@@ -182,16 +182,32 @@ with tab1:
         else:
             razon = razon_opcion
     if st.button("Guardar Ensamble", disabled=bloqueado):
-        conn.execute("""
-        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, 
-        (
-            orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
-            trabajador, ubicacion,
-            te, tm, pausa,
-            razon,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ))
+
+        if df.empty:
+        # INSERTAR
+            conn.execute("""
+            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
+                trabajador, ubicacion,
+                te, tm, pausa,
+                razon,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ))
+        else:
+        # ACTUALIZAR
+            conn.execute("""
+            UPDATE produccion
+            SET Porcentaje=?, Turno=?, Trabajador=?, Ubicacion=?,
+                Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
+            WHERE Orden=? AND Area='Ensamble' AND Seccion=?
+            """, (
+                porcentaje, turno, trabajador, ubicacion,
+                te, tm, pausa, razon,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                orden_activa, seccion_sel
+            ))
+
         conn.commit()
         st.success("Guardado")
         st.rerun()
@@ -249,15 +265,30 @@ with tab2:
         else:
             razon = razon_opcion
     if st.button("Guardar Alambrado", disabled=bloqueado):
-        conn.execute("""
-        INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
-        """,(
+
+        if df.empty:
+            conn.execute("""
+            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
                 orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
                 trabajador, ubicacion,
                 te, tm, pausa,
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
+        else:
+            conn.execute("""
+            UPDATE produccion
+            SET Porcentaje=?, Turno=?, Trabajador=?, Ubicacion=?,
+                Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
+            WHERE Orden=? AND Area=? AND Seccion=?
+            """, (
+                porcentaje, turno, trabajador, ubicacion,
+                te, tm, pausa, razon,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                orden_activa, tipo_alambrado, seccion_sel
+            ))
+
         conn.commit()
         st.success("Guardado")
         st.rerun()
@@ -362,8 +393,8 @@ with tab4:
         with open("reporte_produccion.pdf", "rb") as file:
             st.download_button("Descargar PDF", file, "reporte_produccion.pdf")
 
-df = pd.read_sql_query("SELECT * FROM produccion", conn)
-df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
+    df = pd.read_sql_query("SELECT * FROM produccion", conn)
+    df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
 
 if not df.empty:
 

@@ -148,7 +148,7 @@ with tab1:
     params=(orden_activa, seccion_sel)
 )
     df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
-    params=(orden_activa, seccion_sel)
+    
     
 
     bloqueado = not df.empty and not editar
@@ -396,7 +396,7 @@ with tab4:
     df = pd.read_sql_query("SELECT * FROM produccion", conn)
     df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
 
-if not df.empty:
+    if not df.empty:
 
         for orden in df["Orden"].unique():
 

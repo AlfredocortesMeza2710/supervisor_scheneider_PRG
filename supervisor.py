@@ -17,9 +17,9 @@ tipo_linea = st.selectbox(
     ["MCX", "HCX", "ETS"]
 )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-db_path = os.path.join(BASE_DIR, "produccion_v2.db")
+db_path = os.path.join(BASE_DIR, "produccion_nueva.db")
 
-conn = sqlite3.connect(db_path, check_same_thread=False)
+conn = sqlite3.connect(db_path, check_same_thread=False, timeout=20)
 
 # -------------------------------------------------
 # USUARIOS (LOGIN)

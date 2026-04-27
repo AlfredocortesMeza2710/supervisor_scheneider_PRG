@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS usuarios (
 )
 """)
 conn.commit()
-
+# CREAR USUARIO ADMIN POR DEFECTO
+try:
+    conn.execute("INSERT INTO usuarios VALUES (?, ?)", ("Alfredo", "contraseña123"))
+    conn.commit()
+except:
+    pass  # ya existe
 st.title("🔐 Login Supervisor")
 
 if "logged_in" not in st.session_state:
@@ -68,7 +73,7 @@ if st.sidebar.button("Cerrar sesión"):
     st.session_state.logged_in = False
     st.rerun()
 
-if st.session_state.usuario == "admin":
+if st.session_state.usuario == "Alfredo":
 
     nuevo_user = st.sidebar.text_input("Nuevo usuario")
     nueva_pass = st.sidebar.text_input("Contraseña", type="password")

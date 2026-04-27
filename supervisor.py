@@ -8,6 +8,7 @@ import sqlite3
 from datetime import datetime
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
+import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide")
 st.title("LINEA DE PRODUCCIÓN")
@@ -19,6 +20,69 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, "produccion_v2.db")
 
 conn = sqlite3.connect(db_path, check_same_thread=False)
+
+# -------------------------------------------------
+# USUARIOS (LOGIN)
+# -------------------------------------------------
+conn.execute("""
+CREATE TABLE IF NOT EXISTS usuarios (
+    username TEXT PRIMARY KEY,
+    password TEXT
+)
+""")
+conn.commit()
+
+st.title("🔐 Login Supervisor")
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+
+    if st.button("Iniciar sesión"):
+        user = conn.execute(
+            "SELECT * FROM usuarios WHERE username=? AND password=?",
+            (usuario, password)
+        ).fetchone()
+
+        if user:
+            st.session_state.logged_in = True
+            st.session_state.usuario = usuario
+            st.success("Bienvenido")
+            st.rerun()
+        else:
+            st.error("Credenciales incorrectas")
+
+    st.stop()
+# -------------------------------------------------
+# CREAR USUARIOS (SOLO ADMIN)
+# -------------------------------------------------
+st.sidebar.subheader("Usuarios")
+
+st.sidebar.markdown("---")
+
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state.logged_in = False
+    st.rerun()
+
+if st.session_state.usuario == "admin":
+
+    nuevo_user = st.sidebar.text_input("Nuevo usuario")
+    nueva_pass = st.sidebar.text_input("Contraseña", type="password")
+
+    if st.sidebar.button("Crear usuario"):
+        try:
+            conn.execute(
+                "INSERT INTO usuarios VALUES (?, ?)",
+                (nuevo_user, nueva_pass)
+            )
+            conn.commit()
+            st.sidebar.success("Usuario creado")
+        except:
+            st.sidebar.error("Usuario ya existe")
 
 # -------------------------------------------------
 # BASE DE DATOS
@@ -72,7 +136,10 @@ orden_sb = st.sidebar.text_input("Orden")
 secciones_sb = st.sidebar.number_input("Secciones", min_value=1)
 fecha_sb = st.sidebar.date_input("Fecha")
 
-if st.sidebar.button("Agregar Orden"):
+if st.sidebar.button("Agregar Orden") and st.session_state.logged_in:
+    if not orden_sb:
+        st.sidebar.warning("Ingresa una orden")
+        st.stop()    
     try:
         conn.execute(
             "INSERT INTO ordenes VALUES (?, ?, ?)",
@@ -103,8 +170,7 @@ orden_eliminar = st.sidebar.selectbox(
     df_ordenes["Orden"],
     key="delete"
 )
-
-if st.sidebar.button("Eliminar Orden"):
+if st.sidebar.button("Eliminar Orden") and st.session_state.logged_in:
     conn.execute("DELETE FROM produccion WHERE Orden=?", (orden_eliminar,))
     conn.execute("DELETE FROM faltantes WHERE Orden=?", (orden_eliminar,))
     conn.execute("DELETE FROM ordenes WHERE Orden=?", (orden_eliminar,))
@@ -181,8 +247,10 @@ with tab1:
             razon = st.text_input("Especifica la razón", disabled=bloqueado)
         else:
             razon = razon_opcion
-    if st.button("Guardar Ensamble", disabled=bloqueado):
-
+    if st.button("Guardar Ensamble", disabled=bloqueado) and st.session_state.logged_in:
+        if not trabajador:
+            st.warning("Ingresa el nombre del trabajador")
+            st.stop()
         if df.empty:
         # INSERTAR
             conn.execute("""
@@ -264,8 +332,10 @@ with tab2:
             razon = st.text_input("Especifica la razón", key="alm_otro", disabled=bloqueado)
         else:
             razon = razon_opcion
-    if st.button("Guardar Alambrado", disabled=bloqueado):
-
+    if st.button("Guardar Alambrado", disabled=bloqueado) and st.session_state.logged_in:
+        if not trabajador:
+            st.warning("Ingresa el nombre del trabajador")
+            st.stop()
         if df.empty:
             conn.execute("""
             INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -303,7 +373,10 @@ with tab3:
     material = st.text_input("Material")
     cantidad = st.number_input("Cantidad", min_value=1)
 
-    if st.button("Registrar Faltante"):
+    if st.button("Registrar Faltante") and st.session_state.logged_in:
+        if not material:
+            st.warning("Ingresa el material")
+            st.stop()
         conn.execute("""
         INSERT INTO faltantes VALUES (NULL,?,?,?,?,?,?)
         """, (
@@ -349,6 +422,15 @@ with tab4:
         for orden in df["Orden"].unique():
 
             elementos.append(Paragraph(f"<b>Orden: {orden}</b>", styles["Title"]))
+        
+            df_prom = df[(df["Orden"] == orden) & 
+             (df["Area"].isin(["Ensamble", "Alambrado en sección", "Alambrado en panel"]))]
+
+            promedio = df_prom["Porcentaje"].mean()
+            promedio = 0 if pd.isna(promedio) else round(promedio, 1)
+
+            elementos.append(Paragraph(f"<b>Avance general: {promedio}%</b>", styles["Normal"]))
+            elementos.append(Spacer(1, 10))
             elementos.append(Paragraph(f"Tipo de línea: {tipo_linea}", styles["Normal"]))
             elementos.append(Spacer(1, 10))
 
@@ -387,8 +469,46 @@ with tab4:
 
                 elementos.append(Paragraph(texto_falt, styles["Normal"]))
                 elementos.append(Spacer(1, 15))    
+        # -------------------------
+# GRAFICA DE TURNOS
+# -------------------------
+            df_turnos = df[df["Orden"] == orden].copy()
+            df_turnos = df_turnos[df_turnos["Area"].isin([
+                "Ensamble",
+                "Alambrado en sección",
+                "Alambrado en panel"
+            ])]
+            if df_turnos.empty:
+                continue
 
-        doc.build(elementos)
+            df_turnos["Fecha"] = pd.to_datetime(df_turnos["Fecha"])
+
+            df_group = df_turnos.groupby(["Fecha", "Turno"])["Porcentaje"].mean().reset_index()
+            if df_group.empty:
+                continue
+            fig, ax = plt.subplots()
+
+            for turno, color in zip(["Primer turno", "Tercer turno"], ["red", "blue"]):
+                data = df_group[df_group["Turno"] == turno]
+                ax.plot(data["Fecha"], data["Porcentaje"], label=turno, color=color)
+
+            ax.set_title("Tendencia de avance por turno")
+            ax.set_ylabel("Porcentaje")
+            ax.legend()
+
+            plt.xticks(rotation=45)
+
+            grafica_path = f"grafica_{orden}.png"
+            plt.savefig(grafica_path, bbox_inches="tight")
+            plt.close()
+
+            elementos.append(Image(grafica_path, width=400, height=200))
+
+        try:
+            doc.build(elementos)
+        except Exception as e:
+            st.error(f"Error al generar PDF: {e}")
+            st.stop()
              
         with open("reporte_produccion.pdf", "rb") as file:
             st.download_button("Descargar PDF", file, "reporte_produccion.pdf")

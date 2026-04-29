@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS produccion (
     Seccion INTEGER,
     Porcentaje REAL,
     Turno TEXT,
+    Momento TEXT,
     Trabajador TEXT,
     Ubicacion TEXT,
     Tiempo_efectivo REAL,
@@ -227,8 +228,14 @@ with tab1:
     if bloqueado:
         st.warning("Sección bloqueada")
 
+    
     porcentaje = st.slider("Avance (%)", 0, 100, step=10, disabled=bloqueado)
     turno = st.selectbox("Turno", ["Primer turno", "Tercer turno"], disabled=bloqueado)
+    momento = st.selectbox(
+        "Momento del turno",
+        ["Inicio", "Mitad", "Final"],
+        disabled=bloqueado
+    )
     trabajador = st.text_input("Trabajador", disabled=bloqueado)
 
     ubicacion = st.selectbox(
@@ -259,10 +266,10 @@ with tab1:
         if df.empty:
         # INSERTAR
             conn.execute("""
-            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
-                trabajador, ubicacion,
+                momento, trabajador, ubicacion,
                 te, tm, pausa,
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -271,11 +278,11 @@ with tab1:
         # ACTUALIZAR
             conn.execute("""
             UPDATE produccion
-            SET Porcentaje=?, Turno=?, Trabajador=?, Ubicacion=?,
+            SET Porcentaje=?, Turno=?, Momento=?, Trabajador=?, Ubicacion=?,
                 Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
             WHERE Orden=? AND Area='Ensamble' AND Seccion=?
             """, (
-                porcentaje, turno, trabajador, ubicacion,
+                porcentaje, turno, momento, trabajador, ubicacion,
                 te, tm, pausa, razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 orden_activa, seccion_sel
@@ -312,6 +319,12 @@ with tab2:
 
     porcentaje = st.slider("Avance (%)", 0, 100, step=10, key="alm", disabled=bloqueado)
     turno = st.selectbox("Turno", ["Primer turno", "Tercer turno"], key="alm_t", disabled=bloqueado)
+    momento = st.selectbox(
+        "Momento del turno",
+        ["Inicio", "Mitad", "Final"],
+        key="alm_momento",
+        disabled=bloqueado
+    )
     trabajador = st.text_input("Trabajador", key="alm_trab", disabled=bloqueado)
 
     ubicacion = st.selectbox(
@@ -342,23 +355,25 @@ with tab2:
             st.warning("Ingresa el nombre del trabajador")
             st.stop()
         if df.empty:
+    # INSERTAR
             conn.execute("""
-            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
-                trabajador, ubicacion,
+                momento, trabajador, ubicacion,
                 te, tm, pausa,
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
         else:
+    # ACTUALIZAR
             conn.execute("""
             UPDATE produccion
-            SET Porcentaje=?, Turno=?, Trabajador=?, Ubicacion=?,
+            SET Porcentaje=?, Turno=?, Momento=?, Trabajador=?, Ubicacion=?,
                 Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
             WHERE Orden=? AND Area=? AND Seccion=?
             """, (
-                porcentaje, turno, trabajador, ubicacion,
+                porcentaje, turno, momento, trabajador, ubicacion,
                 te, tm, pausa, razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 orden_activa, tipo_alambrado, seccion_sel
@@ -461,7 +476,7 @@ with tab4:
                 elementos.append(Paragraph(texto, styles["Normal"]))
                 elementos.append(Spacer(1, 12))
 
-# AQUÍ VA (fuera del for sec)
+
             faltantes_ord = df_falt[df_falt["Orden"] == orden]
 
             if not faltantes_ord.empty:
@@ -474,7 +489,7 @@ with tab4:
 
                 elementos.append(Paragraph(texto_falt, styles["Normal"]))
                 elementos.append(Spacer(1, 15))    
-        # -------------------------
+# -------------------------
 # GRAFICA DE TURNOS
 # -------------------------
             df_turnos = df[df["Orden"] == orden].copy()
@@ -488,17 +503,23 @@ with tab4:
 
             df_turnos["Fecha"] = pd.to_datetime(df_turnos["Fecha"])
 
-            df_group = df_turnos.groupby(["Fecha", "Turno"])["Porcentaje"].mean().reset_index()
+            orden_momentos = ["Inicio", "Mitad", "Final"]
+
+            df_group = df_turnos.groupby(["Momento", "Turno"])["Porcentaje"].mean().reset_index()
+
+            df_group["Momento"] = pd.Categorical(df_group["Momento"], categories=orden_momentos, ordered=True)
+
+            df_group = df_group.sort_values("Momento")
             if df_group.empty:
                 continue
             fig, ax = plt.subplots()
 
             for turno, color in zip(["Primer turno", "Tercer turno"], ["red", "blue"]):
                 data = df_group[df_group["Turno"] == turno]
-                ax.plot(data["Fecha"], data["Porcentaje"], label=turno, color=color)
+                ax.plot(data["Momento"], data["Porcentaje"], marker='o', label=turno)
 
-            ax.set_title("Tendencia de avance por turno")
-            ax.set_ylabel("Porcentaje")
+            ax.set_title("Comparativa de avance por turno")
+            ax.set_xlabel("Momento del turno")
             ax.legend()
 
             plt.xticks(rotation=45)
@@ -543,7 +564,7 @@ with tab4:
                 # Separar por tipo de alambrado
                 df_ensamble = df_sec[df_sec["Area"] == "Ensamble"]
 
-# AQUÍ ESTÁ EL FIX
+
                 df_seccion = df_sec[df_sec["Area"].isin(["Alambrado", "Alambrado en sección"])]
                 df_panel = df_sec[df_sec["Area"] == "Alambrado en panel"]
 

@@ -502,9 +502,21 @@ with tab4:
                 continue
 
             df_turnos["Fecha"] = pd.to_datetime(df_turnos["Fecha"])
-
+            df_turnos["Momento"] = df_turnos["Momento"].fillna("Inicio")
+            df_turnos["Turno"] = df_turnos["Turno"].fillna("Sin turno")
+            if df_turnos.empty:
+                continue
             orden_momentos = ["Inicio", "Mitad", "Final"]
+            # DEBUG (puedes dejarlo permanente incluso)
+            
 
+# PROTECCIÓN
+            if "Momento" not in df_turnos.columns or "Turno" not in df_turnos.columns:
+                st.warning("Faltan columnas para generar la gráfica")
+                continue
+            # LIMPIEZA COMPLETA (ESTO TE FALTABA)
+            df_turnos["Porcentaje"] = pd.to_numeric(df_turnos["Porcentaje"], errors="coerce")
+            df_turnos = df_turnos.dropna(subset=["Porcentaje"])
             df_group = df_turnos.groupby(["Momento", "Turno"])["Porcentaje"].mean().reset_index()
 
             df_group["Momento"] = pd.Categorical(df_group["Momento"], categories=orden_momentos, ordered=True)
@@ -513,14 +525,23 @@ with tab4:
             if df_group.empty:
                 continue
             fig, ax = plt.subplots()
+            hay_datos = False
 
             for turno, color in zip(["Primer turno", "Tercer turno"], ["red", "blue"]):
                 data = df_group[df_group["Turno"] == turno]
-                ax.plot(data["Momento"], data["Porcentaje"], marker='o', label=turno)
 
+                if not data.empty:
+                    ax.plot(data["Momento"], data["Porcentaje"], marker='o', label=turno)
+                    hay_datos = True
+
+            if not hay_datos:
+                plt.close()
+                continue
+            
             ax.set_title("Comparativa de avance por turno")
             ax.set_xlabel("Momento del turno")
-            ax.legend()
+            if ax.has_data():
+                ax.legend()
 
             plt.xticks(rotation=45)
 
@@ -539,8 +560,17 @@ with tab4:
         with open("reporte_produccion.pdf", "rb") as file:
             st.download_button("Descargar PDF", file, "reporte_produccion.pdf")
 
-    df = pd.read_sql_query("SELECT * FROM produccion", conn)
-    df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
+    df = pd.read_sql_query(
+        "SELECT * FROM produccion WHERE Orden=?",
+        conn,
+        params=(orden_activa,)
+    )
+
+    df_falt = pd.read_sql_query(
+        "SELECT * FROM faltantes WHERE Orden=?",
+        conn,
+        params=(orden_activa,)
+    )
 
     if not df.empty:
 

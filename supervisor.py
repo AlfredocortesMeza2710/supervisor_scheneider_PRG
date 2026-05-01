@@ -264,13 +264,17 @@ with tab1:
             st.warning("Ingresa el nombre del trabajador")
             st.stop()
         if df.empty:
-        # INSERTAR
             conn.execute("""
-            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO produccion (
+                Orden, Area, Seccion, Porcentaje, Turno,
+                Momento, Trabajador, Ubicacion,
+                Tiempo_efectivo, Tiempo_muerto, Pausas,
+                Razon, Fecha
+            )VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
                 momento, trabajador, ubicacion,
-                te, tm, pausa,
+                float(te), float(tm), float(pausa),
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
@@ -283,7 +287,7 @@ with tab1:
             WHERE Orden=? AND Area='Ensamble' AND Seccion=?
             """, (
                 porcentaje, turno, momento, trabajador, ubicacion,
-                te, tm, pausa, razon,
+                float(te), float(tm), float(pausa), razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 orden_activa, seccion_sel
             ))
@@ -355,13 +359,17 @@ with tab2:
             st.warning("Ingresa el nombre del trabajador")
             st.stop()
         if df.empty:
-    # INSERTAR
             conn.execute("""
-            INSERT INTO produccion VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO produccion (
+               Orden, Area, Seccion, Porcentaje, Turno,
+                Momento, Trabajador, Ubicacion,
+                Tiempo_efectivo, Tiempo_muerto, Pausas,
+                Razon, Fecha
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
                 momento, trabajador, ubicacion,
-                te, tm, pausa,
+                float(te), float(tm), float(pausa),
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
@@ -374,7 +382,7 @@ with tab2:
             WHERE Orden=? AND Area=? AND Seccion=?
             """, (
                 porcentaje, turno, momento, trabajador, ubicacion,
-                te, tm, pausa, razon,
+                float(te), float(tm), float(pausa), razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 orden_activa, tipo_alambrado, seccion_sel
             ))
@@ -436,6 +444,9 @@ with tab4:
         elementos.append(Spacer(1, 10))
 
         df = pd.read_sql_query("SELECT * FROM produccion", conn)
+        df["Tiempo_efectivo"] = pd.to_numeric(df["Tiempo_efectivo"], errors="coerce")
+        df["Tiempo_muerto"] = pd.to_numeric(df["Tiempo_muerto"], errors="coerce")
+        df["Pausas"] = pd.to_numeric(df["Pausas"], errors="coerce")
         df_falt = pd.read_sql_query("SELECT * FROM faltantes", conn)
         df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
         df_falt["Fecha"] = pd.to_datetime(df_falt["Fecha"], errors="coerce")

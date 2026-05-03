@@ -223,7 +223,7 @@ with tab1:
     
     
 
-    bloqueado = not df.empty and not editar
+    bloqueado = False 
 
     if bloqueado:
         st.warning("Sección bloqueada")
@@ -263,35 +263,30 @@ with tab1:
         if not trabajador:
             st.warning("Ingresa el nombre del trabajador")
             st.stop()
-        if df.empty:
+        # VALIDAR DUPLICADO POR MOMENTO
+        existe = conn.execute("""
+        SELECT 1 FROM produccion 
+        WHERE Orden=? AND Area=? AND Seccion=? 
+        AND Turno=? AND Momento=?
+        """, (orden_activa, "Ensamble", seccion_sel, turno, momento)).fetchone()
+
+        if existe:
+            st.warning("Ya existe registro para este momento")
+        else:
             conn.execute("""
             INSERT INTO produccion (
                 Orden, Area, Seccion, Porcentaje, Turno,
                 Momento, Trabajador, Ubicacion,
                 Tiempo_efectivo, Tiempo_muerto, Pausas,
                 Razon, Fecha
-            )VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 orden_activa, "Ensamble", seccion_sel, porcentaje, turno,
                 momento, trabajador, ubicacion,
-                float(te), float(tm), float(pausa),
+                float(te or 0), float(tm or 0), float(pausa or 0),
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
-        else:
-        # ACTUALIZAR
-            conn.execute("""
-            UPDATE produccion
-            SET Porcentaje=?, Turno=?, Momento=?, Trabajador=?, Ubicacion=?,
-                Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
-            WHERE Orden=? AND Area='Ensamble' AND Seccion=?
-            """, (
-                porcentaje, turno, momento, trabajador, ubicacion,
-                float(te), float(tm), float(pausa), razon,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                orden_activa, seccion_sel
-            ))
-
         conn.commit()
         st.success("Guardado")
         st.rerun()
@@ -316,7 +311,7 @@ with tab2:
         params=(orden_activa, tipo_alambrado, seccion_sel)
     )
 
-    bloqueado = not df.empty and not editar
+    bloqueado = False 
 
     if bloqueado:
         st.warning("Sección bloqueada")
@@ -358,10 +353,19 @@ with tab2:
         if not trabajador:
             st.warning("Ingresa el nombre del trabajador")
             st.stop()
-        if df.empty:
+        # VALIDAR DUPLICADO POR MOMENTO
+        existe = conn.execute("""
+        SELECT 1 FROM produccion 
+        WHERE Orden=? AND Area=? AND Seccion=? 
+        AND Turno=? AND Momento=?
+        """, (orden_activa, tipo_alambrado, seccion_sel, turno, momento)).fetchone()
+
+        if existe:
+            st.warning("Ya existe registro para este momento")
+        else:
             conn.execute("""
             INSERT INTO produccion (
-               Orden, Area, Seccion, Porcentaje, Turno,
+                Orden, Area, Seccion, Porcentaje, Turno,
                 Momento, Trabajador, Ubicacion,
                 Tiempo_efectivo, Tiempo_muerto, Pausas,
                 Razon, Fecha
@@ -369,24 +373,10 @@ with tab2:
             """, (
                 orden_activa, tipo_alambrado, seccion_sel, porcentaje, turno,
                 momento, trabajador, ubicacion,
-                float(te), float(tm), float(pausa),
+                float(te or 0), float(tm or 0), float(pausa or 0),
                 razon,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
-        else:
-    # ACTUALIZAR
-            conn.execute("""
-            UPDATE produccion
-            SET Porcentaje=?, Turno=?, Momento=?, Trabajador=?, Ubicacion=?,
-                Tiempo_efectivo=?, Tiempo_muerto=?, Pausas=?, Razon=?, Fecha=?
-            WHERE Orden=? AND Area=? AND Seccion=?
-            """, (
-                porcentaje, turno, momento, trabajador, ubicacion,
-                float(te), float(tm), float(pausa), razon,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                orden_activa, tipo_alambrado, seccion_sel
-            ))
-
         conn.commit()
         st.success("Guardado")
         st.rerun()
@@ -468,7 +458,8 @@ with tab4:
             df_ord = df[df["Orden"] == orden]
             for sec in sorted(df_ord["Seccion"].unique()):
                 df_sec = df_ord[df_ord["Seccion"] == sec]
-                df_sec = df_sec.sort_values("Fecha").drop_duplicates(subset=["Area"], keep="last")
+                # NO eliminar duplicados → queremos historial
+                df_sec = df_sec.sort_values("Fecha")
 
                 texto = f"<b>Sección {sec}</b><br/>"
 
@@ -529,10 +520,13 @@ with tab4:
             df_turnos["Porcentaje"] = pd.to_numeric(df_turnos["Porcentaje"], errors="coerce")
             df_turnos = df_turnos.dropna(subset=["Porcentaje"])
             df_group = df_turnos.groupby(["Momento", "Turno"])["Porcentaje"].mean().reset_index()
+            df_group["Momento"] = pd.Categorical(
+                df_group["Momento"],
+                categories=["Inicio", "Mitad", "Final"],
+                ordered=True
+            )
 
-            df_group["Momento"] = pd.Categorical(df_group["Momento"], categories=orden_momentos, ordered=True)
-
-            df_group = df_group.sort_values("Momento")
+            df_group = df_group.sort_values(["Turno", "Momento"])
             if df_group.empty:
                 continue
             fig, ax = plt.subplots()
@@ -542,7 +536,7 @@ with tab4:
                 data = df_group[df_group["Turno"] == turno]
 
                 if not data.empty:
-                    ax.plot(data["Momento"], data["Porcentaje"], marker='o', label=turno)
+                    ax.plot(data["Momento"], data["Porcentaje"], marker='o', label=turno, color=color)
                     hay_datos = True
 
             if not hay_datos:
@@ -601,7 +595,8 @@ with tab4:
                 col1, col2 = st.columns(2)
 
                 df_sec = df_ord[df_ord["Seccion"] == sec]
-                df_sec = df_sec.sort_values("Fecha").drop_duplicates(subset=["Area"], keep="last")
+                # NO eliminar duplicados → queremos historial
+                df_sec = df_sec.sort_values("Fecha")
                 # Separar por tipo de alambrado
                 df_ensamble = df_sec[df_sec["Area"] == "Ensamble"]
 
